@@ -1,4 +1,4 @@
-from typing import TypeVar
+from typing import TypeVar, Tuple
 
 import serial
 
@@ -22,8 +22,13 @@ def dilithium_k(sec: int) -> int:
 def dilithium_l(sec: int) -> int:
     return dilithium_value(sec, 4, 5, 7)
 
-def kyber_pke_key_gen(s: serial.Serial, seed: bytes, k: int) -> tuple[bytes, bytes]:
-    s.write((kyber_mode(k) + 0x01).to_bytes())
+def write_mode(s: serial.Serial, mode: int):
+    s.write(b'\x01')
+    s.write(mode.to_bytes(1, 'big'))
+
+
+def kyber_pke_key_gen(s: serial.Serial, seed: bytes, k: int) -> Tuple[bytes, bytes]:
+    write_mode(s, (kyber_mode(k) + 0x01))
     s.write(seed)
 
     pk = s.read(k * 384 + 32)
@@ -32,7 +37,7 @@ def kyber_pke_key_gen(s: serial.Serial, seed: bytes, k: int) -> tuple[bytes, byt
     return (pk, sk)
 
 def kyber_pke_enc(s: serial.Serial, pk: bytes, m: bytes, r: bytes, k: int) -> bytes:
-    s.write((kyber_mode(k) + 0x02).to_bytes())
+    write_mode(s, (kyber_mode(k) + 0x02))
 
     s.write(pk)
     s.write(m)
@@ -46,7 +51,7 @@ def kyber_pke_enc(s: serial.Serial, pk: bytes, m: bytes, r: bytes, k: int) -> by
     return c
 
 def kyber_pke_dec(s: serial.Serial, sk: bytes, c: bytes, k: int) -> bytes:
-    s.write((kyber_mode(k) + 0x03).to_bytes())
+    write_mode(s, (kyber_mode(k) + 0x03))
 
     s.write(sk)
     s.write(c)
@@ -55,8 +60,8 @@ def kyber_pke_dec(s: serial.Serial, sk: bytes, c: bytes, k: int) -> bytes:
 
     return m
 
-def kyber_kem_key_gen(s: serial.Serial, seed: bytes, z: bytes, k: int) -> tuple[bytes, bytes]:
-    s.write((kyber_mode(k) + 0x04).to_bytes())
+def kyber_kem_key_gen(s: serial.Serial, seed: bytes, z: bytes, k: int) -> Tuple[bytes, bytes]:
+    write_mode(s, (kyber_mode(k) + 0x04))
     s.write(seed)
     s.write(z)
 
@@ -65,8 +70,8 @@ def kyber_kem_key_gen(s: serial.Serial, seed: bytes, z: bytes, k: int) -> tuple[
 
     return (pk, sk)
 
-def kyber_kem_enc(s: serial.Serial, pk: bytes, m: bytes, k: int) -> tuple[bytes, bytes]:
-    s.write((kyber_mode(k) + 0x05).to_bytes())
+def kyber_kem_enc(s: serial.Serial, pk: bytes, m: bytes, k: int) -> Tuple[bytes, bytes]:
+    write_mode(s, (kyber_mode(k) + 0x05))
 
     s.write(pk)
     s.write(m)
@@ -80,17 +85,17 @@ def kyber_kem_enc(s: serial.Serial, pk: bytes, m: bytes, k: int) -> tuple[bytes,
     return (K, c)
 
 def kyber_kem_dec(s: serial.Serial, sk: bytes, c: bytes, k: int) -> bytes:
-    s.write((kyber_mode(k) + 0x06).to_bytes())
+    write_mode(s, (kyber_mode(k) + 0x06))
 
     s.write(sk)
     s.write(c)
 
     return s.read(32)
 
-def dilithium_key_gen(s: serial.Serial, seed: bytes, sec: int) -> tuple[bytes, bytes]:
+def dilithium_key_gen(s: serial.Serial, seed: bytes, sec: int) -> Tuple[bytes, bytes]:
     k, l = dilithium_k(sec), dilithium_l(sec)
 
-    s.write((dilithium_mode(sec) + 0x07).to_bytes())
+    write_mode(s, (dilithium_mode(sec) + 0x07))
     s.write(seed)
 
     eta_len = dilithium_value(sec, 96, 128, 96)
@@ -103,7 +108,7 @@ def dilithium_key_gen(s: serial.Serial, seed: bytes, sec: int) -> tuple[bytes, b
 def dilithium_sign(s: serial.Serial, sk: bytes, m: bytes, sec: int) -> bytes:
     k, l = dilithium_k(sec), dilithium_l(sec)
 
-    s.write((dilithium_mode(sec) + 0x08).to_bytes())
+    write_mode(s, (dilithium_mode(sec) + 0x08))
 
     s.write(sk)
     s.write(m)
@@ -117,10 +122,11 @@ def dilithium_sign(s: serial.Serial, sk: bytes, m: bytes, sec: int) -> bytes:
     return sig
 
 def dilithium_verify(s: serial.Serial, pk: bytes, sig: bytes, m: bytes, sec: int) -> bool:
-    s.write((dilithium_mode(sec) + 0x09).to_bytes())
+    write_mode(s, (dilithium_mode(sec) + 0x09))
 
     s.write(pk)
     s.write(sig)
+    s.write((8 - len(sig)) % 8 * b'\x00')
     s.write(m)
 
     return int.from_bytes(s.read(8)) != 0
