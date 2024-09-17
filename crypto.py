@@ -117,7 +117,11 @@ def dilithium_sign(s: serial.Serial, sk: bytes, m: bytes, sec: int) -> bytes:
     z_len = dilithium_value(sec, 576, 640, 640)
     omega = dilithium_value(sec, 80, 55, 75)
 
-    sig = s.read(c_len + l * z_len + omega + k)
+    sig_len = c_len + l * z_len + omega + k
+
+    sig = s.read(sig_len)
+    # read padding to multiply of 8B
+    s.read((8 - sig_len) % 8)
 
     return sig
 
@@ -126,6 +130,7 @@ def dilithium_verify(s: serial.Serial, pk: bytes, sig: bytes, m: bytes, sec: int
 
     s.write(pk)
     s.write(sig)
+    # pad to multiply of 8B
     s.write((8 - len(sig)) % 8 * b'\x00')
     s.write(m)
 
